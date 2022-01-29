@@ -3,6 +3,7 @@ import fastifyWebsocket from 'fastify-websocket'
 import fastifyStatic from 'fastify-static'
 import { join, basename, dirname } from 'path'
 import { Timing } from './timing'
+import { SocketMessage } from '#common/types'
 
 import { Command } from 'commander'
 
@@ -28,7 +29,7 @@ new Command()
     }
 
     const timing = new Timing()
-    const fastify = Fastify({logger: true})
+    const fastify = Fastify({logger: {prettyPrint: true}})
     fastify.register(fastifyWebsocket, { options: { clientTracking: true } })
     fastify.register(fastifyStatic, { root: [ESBUILD_OUT_DIR, PUBLIC_DIR]})
     fastify.log.info(opts)
@@ -38,24 +39,21 @@ new Command()
         cacheControl: true,
       })
     })
-    fastify.get('/ws', { websocket: true }, function (connection, _req) {
-      fastify.log.info('new connection', connection)
+    fastify.get('/ws', { websocket: true,  }, function (connection, _req) {
+      connection.socket.send(JSON.stringify(timing.sample()))
       connection.socket.on('message', data => {
-        const message = data.toString()
-        if (message === 'play') {
-          broadcast(timing.play())
-        } else if (message === 'pause') {
-          broadcast(timing.pause())
-        } else {
-          fastify.log.warn(`unknown message ${message}`)
+        const message = JSON.parse(data.toString()) as SocketMessage
+        fastify.log.trace(message, 'message')
+        if (message.vector != null) {
+          broadcast(timing.update(message.vector))
         }
       })
-      connection.socket.send(JSON.stringify(timing.query()))
     })
 
-    function broadcast(obj: any) {
+    function broadcast(message: any) {
+        fastify.log.trace(message, 'broadcast')
       for (const client of fastify.websocketServer.clients) {
-        client.send(JSON.stringify(obj))
+        client.send(JSON.stringify(message))
       }
     }
 
