@@ -16,7 +16,12 @@ document.addEventListener('readystatechange', () => {
 
   const timingObject = new TimingObject()
   setTimingsrc(video, timingObject)
-
+  
+  document.addEventListener('keyup', () => {
+    if (e.code === 'Space') {
+      return socket.send(video.paused ? 'play' : 'pause')
+    }
+  })
   socket.addEventListener('message', event => {
     timingObject.update(JSON.parse(event.data))
   })
